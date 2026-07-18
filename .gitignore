@@ -1,0 +1,28 @@
+# Local manuscript (paper/)
+/paper/
+
+# LaTeX and bibliography build artifacts (anywhere)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.pdf
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+
+# macOS
+.DS_Store
+.env

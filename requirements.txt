@@ -1,0 +1,11 @@
+# Local MLX study harness + OpenAI judge.
+# Install into a project venv:
+#   python3 -m venv .venv
+#   .venv/bin/pip install -U pip
+#   .venv/bin/pip install -r requirements.txt
+
+mlx>=0.22
+mlx-lm>=0.21
+huggingface_hub
+tqdm
+matplotlib
