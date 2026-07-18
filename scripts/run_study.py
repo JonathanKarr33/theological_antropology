@@ -157,6 +157,13 @@ def parse_args() -> argparse.Namespace:
         help="Directory for CSV/JSONL outputs",
     )
     p.add_argument(
+        "--out-stem",
+        type=str,
+        default=None,
+        help="Output basename without extension, e.g. responses_20260717 "
+        "(default: responses_YYYYMMDD in UTC). Use this to resume an existing run.",
+    )
+    p.add_argument(
         "--no-resume",
         action="store_true",
         help="Ignore existing results and re-run (appends duplicates unless you delete first)",
@@ -181,9 +188,11 @@ def main() -> None:
             raise SystemExit(f"Unknown item ids: {sorted(missing)}")
 
     runs = args.runs if args.runs > 0 else int(bank.get("runs_per_cell", 5))
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
-    out_csv = args.out_dir / f"responses_{stamp}.csv"
-    out_jsonl = args.out_dir / f"responses_{stamp}.jsonl"
+    stem = args.out_stem or f"responses_{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+    if stem.endswith(".csv") or stem.endswith(".jsonl"):
+        stem = Path(stem).stem
+    out_csv = args.out_dir / f"{stem}.csv"
+    out_jsonl = args.out_dir / f"{stem}.jsonl"
 
     planned = list(cells(items, args.framings, runs))
     total_cells = len(planned) * len(args.models)

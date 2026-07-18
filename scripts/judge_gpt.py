@@ -16,8 +16,9 @@ Examples:
   # smoke
   .venv/bin/python scripts/judge_gpt.py --limit 10
 
-  # all pending (10 parallel API calls)
+  # all pending (resume into judgments paired with responses file; not a fresh day-0 file)
   .venv/bin/python scripts/judge_gpt.py
+  .venv/bin/python scripts/judge_gpt.py --responses outputs/responses_20260717.csv
 
   # tune parallelism
   .venv/bin/python scripts/judge_gpt.py --workers 10
@@ -85,10 +86,37 @@ def load_system_prompt(path: Path) -> str:
 
 
 def newest_responses(out_dir: Path) -> Path:
-    cands = sorted(out_dir.glob("responses_*.csv"), key=lambda p: p.stat().st_mtime)
+    """Prefer the responses CSV with the most rows (stable resume), then newest mtime."""
+    cands = list(out_dir.glob("responses_*.csv"))
     if not cands:
         raise SystemExit(f"No responses_*.csv under {out_dir}")
-    return cands[-1]
+
+    def rank(p: Path) -> Tuple[int, float]:
+        try:
+            with p.open(encoding="utf-8", newline="") as f:
+                n = max(0, sum(1 for _ in f) - 1)
+        except OSError:
+            n = 0
+        return (n, p.stat().st_mtime)
+
+    return max(cands, key=rank)
+
+
+def judgments_paths(out_dir: Path, responses_path: Path, out_stem: Optional[str]) -> Tuple[Path, Path]:
+    """Resume into the judgments file paired with the responses stem (not a fresh UTC date)."""
+    if out_stem:
+        stem = Path(out_stem).stem
+        if stem.startswith("responses_"):
+            stem = "judgments_" + stem[len("responses_") :]
+        elif not stem.startswith("judgments_"):
+            stem = f"judgments_{stem}"
+    else:
+        name = responses_path.stem  # responses_YYYYMMDD
+        if name.startswith("responses_"):
+            stem = "judgments_" + name[len("responses_") :]
+        else:
+            stem = f"judgments_{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+    return out_dir / f"{stem}.csv", out_dir / f"{stem}.jsonl"
 
 
 def score_one(
@@ -196,6 +224,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--responses", type=Path, default=None)
     p.add_argument("--questions", type=Path, default=SCRIPTS / "questions.json")
     p.add_argument("--out-dir", type=Path, default=REPO_ROOT / "outputs")
+    p.add_argument(
+        "--out-stem",
+        type=str,
+        default=None,
+        help="Judgments basename without extension, e.g. judgments_20260717 "
+        "(default: pair with the responses_* file stem so resume does not reset to 0).",
+    )
     p.add_argument("--prompt-md", type=Path, default=DEFAULT_PROMPT_MD)
     p.add_argument("--models", nargs="+", default=None, help="Filter study model_key(s)")
     p.add_argument("--items", nargs="+", default=None)
@@ -240,9 +275,7 @@ def main() -> None:
     filt.framings = args.framings
 
     rows = filter_rows([r for r in load_responses(responses_path) if is_judgable(r)], filt)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
-    out_csv = args.out_dir / f"judgments_{stamp}.csv"
-    out_jsonl = args.out_dir / f"judgments_{stamp}.jsonl"
+    out_csv, out_jsonl = judgments_paths(args.out_dir, responses_path, args.out_stem)
 
     already: Set[Tuple[str, str, str, str]] = set() if args.no_resume else load_done(out_csv)
     work: List[Dict[str, str]] = [r for r in rows if response_key(r) not in already]
@@ -250,8 +283,9 @@ def main() -> None:
         work = work[: args.limit]
 
     key = resolve_api_key()
+    print(f"Responses: {responses_path}", flush=True)
     print(
-        f"Judge GPT: {len(rows)} eligible; {len(already)} done; "
+        f"Judge GPT: {len(rows)} eligible; {len(already)} already scored; "
         f"{len(work)} pending → {out_csv}",
         flush=True,
     )
@@ -260,10 +294,18 @@ def main() -> None:
         f"{'found' if key else 'MISSING'} | rubric: {args.prompt_md}",
         flush=True,
     )
-    if already:
+    if args.no_resume:
+        print("Resume OFF (--no-resume): will re-score and upsert over prior rows.", flush=True)
+    elif already:
         print(
-            f"Resume: skipping {len(already)} already-scored; "
-            "each new judgment is saved immediately.",
+            f"Resume ON: skipping {len(already)} successful judgments; "
+            "failures are retried; each new judgment is saved immediately.",
+            flush=True,
+        )
+    else:
+        print(
+            f"Resume ON: no prior successes in {out_csv.name} yet "
+            "(file missing or empty of valid alignments).",
             flush=True,
         )
 
