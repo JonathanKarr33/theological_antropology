@@ -2,7 +2,7 @@
 
 Code and study data for the paper *Image, Agency, and the Margins*: do language models talk about human dignity the way Catholic theological anthropology does—or only when you ask them in religious language?
 
-**Paper:** `paper/ta.tex` · **Code:** [github.com/JonathanKarr33/theological_antropology](https://github.com/JonathanKarr33/theological_antropology)
+ **Code:** [github.com/JonathanKarr33/theological_antropology](https://github.com/JonathanKarr33/theological_antropology)
 
 ## The idea (in one theological example)
 
@@ -38,7 +38,6 @@ Design per model: **10 items × 2 framings × 5 runs = 100** responses → **300
 
 ```
 .
-├── paper/                 # manuscript (ta.tex, ta.bib, figures/)
 ├── scripts/
 │   ├── questions.json     # prompts + Catholic answer key
 │   ├── run_study.py       # generate model responses
